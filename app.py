@@ -444,6 +444,13 @@ class MetrologyApp:
         pt = [(event.x - self.offset_x) / self.zoom_level,
               (event.y - self.offset_y) / self.zoom_level]
 
+        # Snap second line point to 45° increments when Shift is held
+        if (event.state & 0x1) and self.mode.get() == "line" and len(self.measurement_points) == 1:
+            p1_canvas = self._sop(self.measurement_points[0])
+            sx, sy = self._snap_to_axis(p1_canvas, event.x, event.y)
+            pt = [(sx - self.offset_x) / self.zoom_level,
+                  (sy - self.offset_y) / self.zoom_level]
+
         if self.adding_text:
             if self.image is not None and self.current_text:
                 x, y = int(pt[0]), int(pt[1])
@@ -694,6 +701,14 @@ class MetrologyApp:
     # LIVE PREVIEW
     # ══════════════════════════════════════════════════════════════════════
 
+    def _snap_to_axis(self, p1: tuple, ex: int, ey: int) -> tuple[int, int]:
+        from math import atan2, pi, sqrt, cos, sin
+        dx, dy = ex - p1[0], ey - p1[1]
+        angle = atan2(dy, dx)
+        snapped = round(angle / (pi / 4)) * (pi / 4)
+        dist = sqrt(dx * dx + dy * dy)
+        return (int(p1[0] + dist * cos(snapped)), int(p1[1] + dist * sin(snapped)))
+
     def on_motion(self, event):
         mode = self.mode.get()
         cursors = {"calibrate": "crosshair", "line": "crosshair",
@@ -708,11 +723,14 @@ class MetrologyApp:
 
         if mode == "line" and len(self.measurement_points) == 1:
             p1 = self._sop(self.measurement_points[0])
-            self.canvas.create_line(*p1, event.x, event.y,
+            tx, ty = event.x, event.y
+            if event.state & 0x1:  # Shift held — snap to 45° increments
+                tx, ty = self._snap_to_axis(p1, event.x, event.y)
+            self.canvas.create_line(*p1, tx, ty,
                                     fill=self.line_color, width=2, dash=(6, 4), tags="preview")
             from math import sqrt
-            px = sqrt((event.x-p1[0])**2 + (event.y-p1[1])**2) / self.zoom_level
-            self._plbl((p1[0]+event.x)//2, (p1[1]+event.y)//2 - 14, self._fmt(px))
+            px = sqrt((tx - p1[0])**2 + (ty - p1[1])**2) / self.zoom_level
+            self._plbl((p1[0]+tx)//2, (p1[1]+ty)//2 - 14, self._fmt(px))
 
         elif mode == "angle":
             if len(self.measurement_points) == 1:
