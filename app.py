@@ -9,6 +9,7 @@ from measurements import (
     line_distance, angle_between, preview_angle,
     arc_canvas_points, arc_pil_params, format_distance,
 )
+from translations import TRANSLATIONS
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -27,6 +28,10 @@ class MetrologyApp:
         sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
         w, h = 1700, 900
         self.root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+
+        # ── Language ───────────────────────────────────────────────────────
+        self.lang = "en"
+        self._tr_widgets: list[tuple] = []  # (widget, translation_key)
 
         # ── State ──────────────────────────────────────────────────────────
         self.line_color  = "#3B8ED0"
@@ -67,6 +72,31 @@ class MetrologyApp:
         self._update_mode_buttons()
 
     # ══════════════════════════════════════════════════════════════════════
+    # TRANSLATION
+    # ══════════════════════════════════════════════════════════════════════
+
+    def _t(self, key: str) -> str:
+        return TRANSLATIONS[self.lang].get(key, TRANSLATIONS["en"][key])
+
+    def _apply_language(self, lang: str):
+        self.lang = lang
+        self._build_menu()
+        for widget, key in self._tr_widgets:
+            try:
+                widget.configure(text=self._t(key))
+            except Exception:
+                pass
+        # Refresh dynamic status bar text
+        mode = self.mode.get()
+        self._st_mode.configure(
+            text=f"{self._t('st_mode')}: {self._t(f'mode_{mode}')}")
+        if self.scale_factor is None:
+            self._st_calib.configure(text=self._t("st_not_calibrated"))
+
+    def _on_language_change(self, choice: str):
+        self._apply_language("cs" if choice == "Čeština" else "en")
+
+    # ══════════════════════════════════════════════════════════════════════
     # MENU BAR
     # ══════════════════════════════════════════════════════════════════════
 
@@ -75,30 +105,30 @@ class MetrologyApp:
         self.root.configure(menu=menubar)
 
         fm = Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="File", menu=fm)
-        fm.add_command(label="Open Image…        Ctrl+O", command=self.load_image)
-        fm.add_command(label="Save Image…        Ctrl+S", command=self.save_image)
+        menubar.add_cascade(label=self._t("menu_file"), menu=fm)
+        fm.add_command(label=self._t("menu_open"), command=self.load_image)
+        fm.add_command(label=self._t("menu_save"), command=self.save_image)
         fm.add_separator()
-        fm.add_command(label="Exit", command=self.root.quit)
+        fm.add_command(label=self._t("menu_exit"), command=self.root.quit)
 
         tm = Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Tools", menu=tm)
-        tm.add_command(label="Undo               Ctrl+Z", command=self.undo_last_action)
-        tm.add_command(label="Clear All", command=self.clear_measurements)
+        menubar.add_cascade(label=self._t("menu_tools"), menu=tm)
+        tm.add_command(label=self._t("menu_undo"),  command=self.undo_last_action)
+        tm.add_command(label=self._t("menu_clear"), command=self.clear_measurements)
         tm.add_separator()
-        for label, val in [("Line Mode    L", "line"), ("Angle Mode   A", "angle"),
-                           ("Calibrate    C", "calibrate")]:
-            tm.add_radiobutton(label=label, variable=self.mode, value=val,
+        for key, val in [("menu_line_mode", "line"), ("menu_angle_mode", "angle"),
+                         ("menu_calibrate", "calibrate")]:
+            tm.add_radiobutton(label=self._t(key), variable=self.mode, value=val,
                                command=lambda v=val: self._set_mode(v))
 
         vm = Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="View", menu=vm)
-        vm.add_command(label="Reset View         R", command=self.reset_view)
-        vm.add_command(label="Toggle Dark / Light Mode", command=self.toggle_appearance)
+        menubar.add_cascade(label=self._t("menu_view"), menu=vm)
+        vm.add_command(label=self._t("menu_reset_view"),  command=self.reset_view)
+        vm.add_command(label=self._t("menu_toggle_mode"), command=self.toggle_appearance)
 
         hm = Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Help", menu=hm)
-        hm.add_command(label="About Vision Metrics", command=self._show_about)
+        menubar.add_cascade(label=self._t("menu_help"), menu=hm)
+        hm.add_command(label=self._t("menu_about"), command=self._show_about)
 
     # ══════════════════════════════════════════════════════════════════════
     # LAYOUT
@@ -127,8 +157,9 @@ class MetrologyApp:
             ctk.CTkLabel(bar, text=" │ ", text_color="gray40",
                          font=ctk.CTkFont(size=11)).pack(side="left")
 
-        self._st_mode = ctk.CTkLabel(bar, text="Mode: Line", width=110, anchor="w",
-                                     font=ctk.CTkFont(size=11))
+        self._st_mode = ctk.CTkLabel(
+            bar, text=f"{self._t('st_mode')}: {self._t('mode_line')}",
+            width=110, anchor="w", font=ctk.CTkFont(size=11))
         self._st_mode.pack(side="left", padx=(8, 0))
         _sep()
         self._st_coords = ctk.CTkLabel(bar, text="X: —   Y: —", width=140, anchor="w",
@@ -139,8 +170,9 @@ class MetrologyApp:
                                      font=ctk.CTkFont(size=11))
         self._st_zoom.pack(side="left")
         _sep()
-        self._st_calib = ctk.CTkLabel(bar, text="● Not calibrated", width=200, anchor="w",
-                                      text_color="#E05C5C", font=ctk.CTkFont(size=11))
+        self._st_calib = ctk.CTkLabel(
+            bar, text=self._t("st_not_calibrated"), width=200, anchor="w",
+            text_color="#E05C5C", font=ctk.CTkFont(size=11))
         self._st_calib.pack(side="left")
 
     def _build_sidebar(self):
@@ -150,87 +182,102 @@ class MetrologyApp:
         self._sec_view()
         self._sec_colors()
         self._sec_units()
+        self._sec_language()
         self._sec_history()
 
     # ── Sidebar helpers ────────────────────────────────────────────────────
 
-    def _section(self, title) -> ctk.CTkFrame:
+    def _section(self, key: str) -> ctk.CTkFrame:
         wrap = ctk.CTkFrame(self.sidebar, corner_radius=10)
         wrap.pack(fill="x", padx=8, pady=(8, 0))
-        ctk.CTkLabel(wrap, text=title, font=ctk.CTkFont(size=12, weight="bold"),
-                     anchor="w").pack(fill="x", padx=12, pady=(10, 4))
+        lbl = ctk.CTkLabel(wrap, text=self._t(key),
+                           font=ctk.CTkFont(size=12, weight="bold"), anchor="w")
+        lbl.pack(fill="x", padx=12, pady=(10, 4))
+        self._tr_widgets.append((lbl, key))
         return wrap
 
-    def _btn(self, parent, text, command, **kw):
-        ctk.CTkButton(parent, text=text, command=command,
-                      height=30, **kw).pack(fill="x", padx=12, pady=2)
+    def _btn(self, parent, key: str, command, **kw) -> ctk.CTkButton:
+        b = ctk.CTkButton(parent, text=self._t(key), command=command, height=30, **kw)
+        b.pack(fill="x", padx=12, pady=2)
+        self._tr_widgets.append((b, key))
+        return b
 
     # ── Sidebar sections ───────────────────────────────────────────────────
 
     def _sec_file(self):
-        f = self._section("File")
-        self._btn(f, "Load Image   Ctrl+O", self.load_image)
-        self._btn(f, "Save Image   Ctrl+S", self.save_image,
+        f = self._section("sec_file")
+        self._btn(f, "btn_load", self.load_image)
+        self._btn(f, "btn_save", self.save_image,
                   fg_color=_BTN_INACTIVE, border_width=1, border_color=_BTN_BORDER)
         ctk.CTkFrame(f, height=6, fg_color="transparent").pack()
 
     def _sec_mode(self):
-        f = self._section("Measurement Mode")
+        f = self._section("sec_mode")
         self._mode_btns: dict[str, ctk.CTkButton] = {}
-        for label, val in [("  Line   L", "line"), ("  Angle   A", "angle"),
-                           ("  Calibrate   C", "calibrate")]:
-            b = ctk.CTkButton(f, text=label, height=30,
+        for key, val in [("btn_line", "line"), ("btn_angle", "angle"),
+                         ("btn_calibrate", "calibrate")]:
+            b = ctk.CTkButton(f, text=self._t(key), height=30,
                               command=lambda v=val: self._set_mode(v),
                               fg_color=_BTN_INACTIVE, border_width=1,
                               border_color=_BTN_BORDER)
             b.pack(fill="x", padx=12, pady=2)
             self._mode_btns[val] = b
+            self._tr_widgets.append((b, key))
 
         ctk.CTkFrame(f, height=4, fg_color="transparent").pack()
         ctk.CTkFrame(f, height=1, fg_color="gray30").pack(fill="x", padx=12, pady=4)
 
-        self._btn(f, "Undo   Ctrl+Z", self.undo_last_action,
+        self._btn(f, "btn_undo", self.undo_last_action,
                   fg_color=_BTN_INACTIVE, border_width=1, border_color=_BTN_BORDER)
-        self._btn(f, "Clear All", self.clear_measurements,
+        self._btn(f, "btn_clear", self.clear_measurements,
                   fg_color=("#8B2222", "#7A1E1E"), hover_color=("#A03030", "#8B2525"))
         ctk.CTkFrame(f, height=6, fg_color="transparent").pack()
 
     def _sec_text(self):
-        f = self._section("Annotations")
-        self._btn(f, "Add Text Annotation", self._start_text_flow,
+        f = self._section("sec_annotations")
+        self._btn(f, "btn_add_text", self._start_text_flow,
                   fg_color=_BTN_INACTIVE, border_width=1, border_color=_BTN_BORDER)
         ctk.CTkFrame(f, height=6, fg_color="transparent").pack()
 
     def _sec_view(self):
-        f = self._section("View")
-        for text, var in [("Show Lines", self.show_lines_var),
-                          ("Show Points", self.show_points_var),
-                          ("Show Angles", self.show_angles_var)]:
-            ctk.CTkCheckBox(f, text=text, variable=var,
-                            command=self.redraw_measurements).pack(anchor="w", padx=14, pady=2)
-        self._btn(f, "Reset View   R", self.reset_view,
+        f = self._section("sec_view")
+        for key, var in [("chk_lines",  self.show_lines_var),
+                         ("chk_points", self.show_points_var),
+                         ("chk_angles", self.show_angles_var)]:
+            cb = ctk.CTkCheckBox(f, text=self._t(key), variable=var,
+                                 command=self.redraw_measurements)
+            cb.pack(anchor="w", padx=14, pady=2)
+            self._tr_widgets.append((cb, key))
+        self._btn(f, "btn_reset_view", self.reset_view,
                   fg_color=_BTN_INACTIVE, border_width=1, border_color=_BTN_BORDER)
         ctk.CTkFrame(f, height=6, fg_color="transparent").pack()
 
     def _sec_colors(self):
-        f = self._section("Colors")
-        self._btn(f, "Line Color",  self.change_line_color,
+        f = self._section("sec_colors")
+        self._btn(f, "btn_line_color",  self.change_line_color,
                   fg_color=_BTN_INACTIVE, border_width=1, border_color=_BTN_BORDER)
-        self._btn(f, "Text Color",  self.change_text_color,
+        self._btn(f, "btn_text_color",  self.change_text_color,
                   fg_color=_BTN_INACTIVE, border_width=1, border_color=_BTN_BORDER)
-        self._btn(f, "Point Color", self.change_point_color,
+        self._btn(f, "btn_point_color", self.change_point_color,
                   fg_color=_BTN_INACTIVE, border_width=1, border_color=_BTN_BORDER)
         ctk.CTkFrame(f, height=6, fg_color="transparent").pack()
 
     def _sec_units(self):
-        f = self._section("Distance Unit")
+        f = self._section("sec_units")
         ctk.CTkOptionMenu(f, variable=self.unit,
                           values=["mm", "cm", "in", "px"],
                           command=lambda _: self.redraw_measurements()
                           ).pack(fill="x", padx=12, pady=(2, 10))
 
+    def _sec_language(self):
+        f = self._section("sec_language")
+        ctk.CTkOptionMenu(
+            f, values=["English", "Čeština"],
+            command=self._on_language_change
+        ).pack(fill="x", padx=12, pady=(2, 10))
+
     def _sec_history(self):
-        f = self._section("Measurement History")
+        f = self._section("sec_history")
         self.history_list = tk.Listbox(
             f, height=10, relief="flat", bd=0, highlightthickness=0,
             bg="#2b2b2b", fg="white", selectbackground="#1F6AA5",
@@ -269,7 +316,8 @@ class MetrologyApp:
         self._cancel_input()
         self.mode.set(mode)
         self._update_mode_buttons()
-        self._st_mode.configure(text=f"Mode: {mode.capitalize()}")
+        self._st_mode.configure(
+            text=f"{self._t('st_mode')}: {self._t(f'mode_{mode}')}")
 
     def _update_mode_buttons(self):
         active = self.mode.get()
@@ -297,12 +345,12 @@ class MetrologyApp:
             return
         self.image = cv2.imread(path)
         if self.image is None:
-            messagebox.showerror("Error", "Could not load image.")
+            messagebox.showerror(self._t("title_error"), self._t("err_load_fail"))
             return
         self.zoom_level = 1.0
         self.offset_x = self.offset_y = 0
         self.scale_factor = None
-        self._st_calib.configure(text="● Not calibrated", text_color="#E05C5C")
+        self._st_calib.configure(text=self._t("st_not_calibrated"), text_color="#E05C5C")
         self.display_image()
 
     def display_image(self):
@@ -316,7 +364,6 @@ class MetrologyApp:
             cw = self.root.winfo_width() - 280
             ch = self.root.winfo_height() - 60
 
-        # Visible region in image-pixel coordinates
         img_x0 = max(0.0, -self.offset_x / self.zoom_level)
         img_y0 = max(0.0, -self.offset_y / self.zoom_level)
         img_x1 = min(float(w), (cw - self.offset_x) / self.zoom_level)
@@ -327,7 +374,6 @@ class MetrologyApp:
             self.redraw_measurements()
             return
 
-        # Crop to the visible region, then resize only that crop
         cx0, cy0 = int(img_x0), int(img_y0)
         cx1 = min(w, int(img_x1) + 1)
         cy1 = min(h, int(img_y1) + 1)
@@ -350,7 +396,7 @@ class MetrologyApp:
 
     def save_image(self):
         if self.image is None:
-            messagebox.showwarning("Save", "No image loaded.")
+            messagebox.showwarning(self._t("title_warning"), self._t("err_no_image"))
             return
         path = filedialog.asksaveasfilename(
             defaultextension=".png",
@@ -437,7 +483,7 @@ class MetrologyApp:
         p1, p2 = self.measurement_points[:2]
         px = line_distance(p1, p2)
         if px == 0:
-            messagebox.showerror("Error", "Points are identical.")
+            messagebox.showerror(self._t("title_error"), self._t("err_identical"))
             self.measurement_points.clear()
             return
         line = (p1, p2, px)
@@ -466,25 +512,25 @@ class MetrologyApp:
         p1, p2 = self.calibration_points
         px = line_distance(p1, p2)
         if px == 0:
-            messagebox.showerror("Error", "Points must not overlap.")
+            messagebox.showerror(self._t("title_error"), self._t("err_overlap"))
             self.calibration_points.clear()
             return
 
         dlg = ctk.CTkToplevel(self.root)
-        dlg.title("Calibration")
+        dlg.title(self._t("dlg_calib_title"))
         dlg.geometry("340x180")
         dlg.resizable(False, False)
         dlg.grab_set()
         dlg.lift()
 
-        ctk.CTkLabel(dlg, text="Set Scale",
+        ctk.CTkLabel(dlg, text=self._t("dlg_calib_header"),
                      font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(18, 4))
-        ctk.CTkLabel(dlg, text=f"Pixel distance: {px:.1f} px",
+        ctk.CTkLabel(dlg, text=f"{self._t('dlg_calib_px')}: {px:.1f} px",
                      font=ctk.CTkFont(size=12), text_color="gray").pack()
 
         row = ctk.CTkFrame(dlg, fg_color="transparent")
         row.pack(pady=8)
-        ctk.CTkLabel(row, text="Known distance:").pack(side="left", padx=(0, 6))
+        ctk.CTkLabel(row, text=self._t("dlg_calib_known")).pack(side="left", padx=(0, 6))
         entry = ctk.CTkEntry(row, width=110, placeholder_text="e.g. 25.4")
         entry.pack(side="left", padx=2)
         ctk.CTkLabel(row, text=self.unit.get()).pack(side="left", padx=(4, 0))
@@ -507,10 +553,10 @@ class MetrologyApp:
                 dlg.destroy()
                 self.redraw_measurements()
             except ValueError:
-                messagebox.showerror("Error", "Enter a numeric value.")
+                messagebox.showerror(self._t("title_error"), self._t("err_numeric"))
 
         entry.bind("<Return>", lambda _: confirm())
-        ctk.CTkButton(dlg, text="Set Scale", command=confirm).pack(pady=4)
+        ctk.CTkButton(dlg, text=self._t("btn_set_scale"), command=confirm).pack(pady=4)
 
     # ══════════════════════════════════════════════════════════════════════
     # TEXT ANNOTATION
@@ -518,18 +564,19 @@ class MetrologyApp:
 
     def _start_text_flow(self):
         if self.image is None:
-            messagebox.showwarning("Add Text", "Load an image first.")
+            messagebox.showwarning(self._t("title_warning"), self._t("err_load_first"))
             return
         dlg = ctk.CTkToplevel(self.root)
-        dlg.title("Add Text Annotation")
+        dlg.title(self._t("dlg_text_title"))
         dlg.geometry("320x150")
         dlg.resizable(False, False)
         dlg.grab_set()
         dlg.lift()
 
-        ctk.CTkLabel(dlg, text="Text to annotate:",
+        ctk.CTkLabel(dlg, text=self._t("dlg_text_label"),
                      font=ctk.CTkFont(size=13, weight="bold")).pack(pady=(16, 4))
-        entry = ctk.CTkEntry(dlg, width=260, placeholder_text="Enter text…")
+        entry = ctk.CTkEntry(dlg, width=260,
+                             placeholder_text=self._t("dlg_text_ph"))
         entry.pack(pady=4)
         entry.focus()
 
@@ -539,10 +586,10 @@ class MetrologyApp:
                 self.current_text = t
                 self.adding_text  = True
                 dlg.destroy()
-                self._st_mode.configure(text="Click to place text")
+                self._st_mode.configure(text=self._t("st_click_place"))
 
         entry.bind("<Return>", lambda _: confirm())
-        ctk.CTkButton(dlg, text="Place on Image", command=confirm).pack(pady=8)
+        ctk.CTkButton(dlg, text=self._t("btn_place_text"), command=confirm).pack(pady=8)
 
     # ══════════════════════════════════════════════════════════════════════
     # UNDO / CLEAR
@@ -576,7 +623,8 @@ class MetrologyApp:
             self.calibration_points = last.get('previous_points', [])
             self.scale_factor       = last.get('previous_scale', None)
             if self.scale_factor is None:
-                self._st_calib.configure(text="● Not calibrated", text_color="#E05C5C")
+                self._st_calib.configure(text=self._t("st_not_calibrated"),
+                                         text_color="#E05C5C")
             else:
                 self._st_calib.configure(
                     text=f"● {self.scale_factor:.4f} {self.unit.get()}/px",
@@ -776,7 +824,6 @@ class MetrologyApp:
     # ══════════════════════════════════════════════════════════════════════
 
     def _sop(self, point) -> tuple[int, int]:
-        """Scale and offset a point to canvas coordinates."""
         return (int(point[0] * self.zoom_level + self.offset_x),
                 int(point[1] * self.zoom_level + self.offset_y))
 
@@ -813,17 +860,18 @@ class MetrologyApp:
 
     def _show_about(self):
         dlg = ctk.CTkToplevel(self.root)
-        dlg.title("About")
+        dlg.title(self._t("dlg_about_title"))
         dlg.geometry("360x220")
         dlg.resizable(False, False)
         dlg.grab_set()
         dlg.lift()
         ctk.CTkLabel(dlg, text="Vision Metrics",
                      font=ctk.CTkFont(size=22, weight="bold")).pack(pady=(28, 6))
-        ctk.CTkLabel(dlg, text="Professional image measurement & annotation",
+        ctk.CTkLabel(dlg, text=self._t("dlg_about_sub"),
                      font=ctk.CTkFont(size=12)).pack()
-        ctk.CTkLabel(dlg, text="Distance · Angle · Calibration · Text",
+        ctk.CTkLabel(dlg, text=self._t("dlg_about_feat"),
                      font=ctk.CTkFont(size=11), text_color="gray").pack(pady=4)
-        ctk.CTkLabel(dlg, text="Keyboard: L · A · C · R · Ctrl+Z · Ctrl+O · Ctrl+S",
+        ctk.CTkLabel(dlg, text=self._t("dlg_about_keys"),
                      font=ctk.CTkFont(size=10), text_color="gray").pack(pady=2)
-        ctk.CTkButton(dlg, text="Close", command=dlg.destroy, width=100).pack(pady=16)
+        ctk.CTkButton(dlg, text=self._t("btn_close"),
+                      command=dlg.destroy, width=100).pack(pady=16)
