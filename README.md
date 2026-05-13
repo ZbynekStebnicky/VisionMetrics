@@ -37,7 +37,7 @@
 
 3. Run the app:
    ```bash
-   python VisionMetrics.py
+   python main.py
    ```
 
 ---

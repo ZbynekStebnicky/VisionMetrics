@@ -4,12 +4,15 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, colorchooser, Menu
 import customtkinter as ctk
 from PIL import Image, ImageTk, ImageFont, ImageDraw
-from math import atan2, degrees, acos, sqrt
+
+from measurements import (
+    line_distance, angle_between, preview_angle,
+    arc_canvas_points, arc_pil_params, format_distance,
+)
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-# Active / inactive button colors
 _BTN_ACTIVE   = ("#3B8ED0", "#1F6AA5")
 _BTN_INACTIVE = "transparent"
 _BTN_BORDER   = ("gray50", "gray45")
@@ -26,9 +29,9 @@ class MetrologyApp:
         self.root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
 
         # ── State ──────────────────────────────────────────────────────────
-        self.line_color   = "#3B8ED0"
-        self.text_color   = "#FFE000"
-        self.point_color  = "#E05C5C"
+        self.line_color  = "#3B8ED0"
+        self.text_color  = "#FFE000"
+        self.point_color = "#E05C5C"
 
         self.zoom_level = 1.0
         self.offset_x   = 0
@@ -36,16 +39,16 @@ class MetrologyApp:
         self._pan_x     = None
         self._pan_y     = None
 
-        self.image      = None
-        self.image_tk   = None
+        self.image        = None
+        self.image_tk     = None
         self.scale_factor = None
 
-        self.calibration_points  = []
-        self.measurement_points  = []
-        self.lines      = []   # (p1, p2, pixel_dist)
-        self.angles     = []   # (p1, p2, p3, angle_deg)
-        self.arcs       = []   # list of arc-segment id lists
-        self.texts      = []   # (x, y, text)
+        self.calibration_points = []
+        self.measurement_points = []
+        self.lines        = []  # (p1, p2, pixel_dist)
+        self.angles       = []  # (p1, p2, p3, angle_deg)
+        self.arcs         = []  # list of arc-segment id lists
+        self.texts        = []  # (x, y, text)
         self.action_stack = []
 
         self.current_text = ""
@@ -58,7 +61,6 @@ class MetrologyApp:
         self.show_points_var = tk.IntVar(value=1)
         self.show_angles_var = tk.IntVar(value=1)
 
-        # ── Build UI ───────────────────────────────────────────────────────
         self._build_menu()
         self._build_layout()
         self._bind_keys()
@@ -72,7 +74,6 @@ class MetrologyApp:
         menubar = Menu(self.root)
         self.root.configure(menu=menubar)
 
-        # File
         fm = Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=fm)
         fm.add_command(label="Open Image…        Ctrl+O", command=self.load_image)
@@ -80,7 +81,6 @@ class MetrologyApp:
         fm.add_separator()
         fm.add_command(label="Exit", command=self.root.quit)
 
-        # Tools
         tm = Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Tools", menu=tm)
         tm.add_command(label="Undo               Ctrl+Z", command=self.undo_last_action)
@@ -91,13 +91,11 @@ class MetrologyApp:
             tm.add_radiobutton(label=label, variable=self.mode, value=val,
                                command=lambda v=val: self._set_mode(v))
 
-        # View
         vm = Menu(menubar, tearoff=0)
         menubar.add_cascade(label="View", menu=vm)
         vm.add_command(label="Reset View         R", command=self.reset_view)
         vm.add_command(label="Toggle Dark / Light Mode", command=self.toggle_appearance)
 
-        # Help
         hm = Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=hm)
         hm.add_command(label="About Vision Metrics", command=self._show_about)
@@ -107,11 +105,9 @@ class MetrologyApp:
     # ══════════════════════════════════════════════════════════════════════
 
     def _build_layout(self):
-        # Left sidebar
         self.sidebar = ctk.CTkScrollableFrame(self.root, width=260, corner_radius=0)
         self.sidebar.pack(side="left", fill="y")
 
-        # Right area: canvas + status bar
         right = ctk.CTkFrame(self.root, corner_radius=0, fg_color="transparent")
         right.pack(side="left", expand=True, fill="both")
 
@@ -131,20 +127,20 @@ class MetrologyApp:
             ctk.CTkLabel(bar, text=" │ ", text_color="gray40",
                          font=ctk.CTkFont(size=11)).pack(side="left")
 
-        self._st_mode   = ctk.CTkLabel(bar, text="Mode: Line", width=110, anchor="w",
-                                       font=ctk.CTkFont(size=11))
+        self._st_mode = ctk.CTkLabel(bar, text="Mode: Line", width=110, anchor="w",
+                                     font=ctk.CTkFont(size=11))
         self._st_mode.pack(side="left", padx=(8, 0))
         _sep()
         self._st_coords = ctk.CTkLabel(bar, text="X: —   Y: —", width=140, anchor="w",
                                        font=ctk.CTkFont(size=11))
         self._st_coords.pack(side="left")
         _sep()
-        self._st_zoom   = ctk.CTkLabel(bar, text="Zoom: 100%", width=90, anchor="w",
-                                       font=ctk.CTkFont(size=11))
+        self._st_zoom = ctk.CTkLabel(bar, text="Zoom: 100%", width=90, anchor="w",
+                                     font=ctk.CTkFont(size=11))
         self._st_zoom.pack(side="left")
         _sep()
-        self._st_calib  = ctk.CTkLabel(bar, text="● Not calibrated", width=200, anchor="w",
-                                       text_color="#E05C5C", font=ctk.CTkFont(size=11))
+        self._st_calib = ctk.CTkLabel(bar, text="● Not calibrated", width=200, anchor="w",
+                                      text_color="#E05C5C", font=ctk.CTkFont(size=11))
         self._st_calib.pack(side="left")
 
     def _build_sidebar(self):
@@ -191,8 +187,7 @@ class MetrologyApp:
             self._mode_btns[val] = b
 
         ctk.CTkFrame(f, height=4, fg_color="transparent").pack()
-        ctk.CTkSeparator(f).pack(fill="x", padx=12, pady=4) if hasattr(ctk, "CTkSeparator") \
-            else ctk.CTkFrame(f, height=1, fg_color="gray30").pack(fill="x", padx=12, pady=4)
+        ctk.CTkFrame(f, height=1, fg_color="gray30").pack(fill="x", padx=12, pady=4)
 
         self._btn(f, "Undo   Ctrl+Z", self.undo_last_action,
                   fg_color=_BTN_INACTIVE, border_width=1, border_color=_BTN_BORDER)
@@ -244,16 +239,16 @@ class MetrologyApp:
         self.history_list.pack(fill="x", padx=12, pady=(2, 10))
 
     # ══════════════════════════════════════════════════════════════════════
-    # CANVAS BINDINGS
+    # BINDINGS
     # ══════════════════════════════════════════════════════════════════════
 
     def _bind_canvas(self):
-        self.canvas.bind("<Button-1>",       self.on_click)
-        self.canvas.bind("<Motion>",         self.on_motion)
-        self.canvas.bind("<MouseWheel>",     self.on_zoom)
-        self.canvas.bind("<ButtonPress-2>",  self._pan_start)
-        self.canvas.bind("<B2-Motion>",      self._pan_move)
-        self.canvas.bind("<ButtonRelease-2>",self._pan_stop)
+        self.canvas.bind("<Button-1>",        self.on_click)
+        self.canvas.bind("<Motion>",          self.on_motion)
+        self.canvas.bind("<MouseWheel>",      self.on_zoom)
+        self.canvas.bind("<ButtonPress-2>",   self._pan_start)
+        self.canvas.bind("<B2-Motion>",       self._pan_move)
+        self.canvas.bind("<ButtonRelease-2>", self._pan_stop)
 
     def _bind_keys(self):
         r = self.root
@@ -317,7 +312,7 @@ class MetrologyApp:
 
         cw = self.canvas.winfo_width()
         ch = self.canvas.winfo_height()
-        if cw <= 1:  # canvas not yet laid out; fall back to window size
+        if cw <= 1:
             cw = self.root.winfo_width() - 280
             ch = self.root.winfo_height() - 60
 
@@ -332,7 +327,7 @@ class MetrologyApp:
             self.redraw_measurements()
             return
 
-        # Crop to visible region only, then resize that small crop
+        # Crop to the visible region, then resize only that crop
         cx0, cy0 = int(img_x0), int(img_y0)
         cx1 = min(w, int(img_x1) + 1)
         cy1 = min(h, int(img_y1) + 1)
@@ -372,7 +367,7 @@ class MetrologyApp:
 
         for start, end, px_dist in self.lines:
             s = (int(start[0]), int(start[1]))
-            e = (int(end[0]), int(end[1]))
+            e = (int(end[0]),   int(end[1]))
             draw.line([s, e], fill=self.line_color, width=2)
             mid = ((s[0]+e[0])//2, (s[1]+e[1])//2)
             draw.text(mid, self._fmt(px_dist), fill=self.text_color, font=font)
@@ -383,7 +378,9 @@ class MetrologyApp:
             p3p = (int(p3[0]), int(p3[1]))
             draw.line([p2p, p1p], fill=self.line_color, width=2)
             draw.line([p2p, p3p], fill=self.line_color, width=2)
-            self._draw_arc_on_pil(pil_img, p2p, p1p, p3p)
+            sa, ea, r = arc_pil_params(p2p, p1p, p3p)
+            bbox = [(p2p[0]-r, p2p[1]-r), (p2p[0]+r, p2p[1]+r)]
+            draw.arc(bbox, start=sa, end=ea, fill=self.line_color, width=2)
             draw.text((p2p[0]+20, p2p[1]-20), f"{angle:.2f}°",
                       fill=self.text_color, font=font)
 
@@ -394,14 +391,13 @@ class MetrologyApp:
         cv2.imwrite(path, out)
 
     # ══════════════════════════════════════════════════════════════════════
-    # MEASUREMENTS
+    # CLICK HANDLING
     # ══════════════════════════════════════════════════════════════════════
 
     def on_click(self, event):
         pt = [(event.x - self.offset_x) / self.zoom_level,
               (event.y - self.offset_y) / self.zoom_level]
 
-        # ── Text placement ─────────────────────────────────────────────
         if self.adding_text:
             if self.image is not None and self.current_text:
                 x, y = int(pt[0]), int(pt[1])
@@ -438,13 +434,13 @@ class MetrologyApp:
                 self.redraw_measurements()
 
     def _finish_line(self):
-        p1, p2 = map(np.array, self.measurement_points[:2])
-        px = float(np.linalg.norm(p2 - p1))
+        p1, p2 = self.measurement_points[:2]
+        px = line_distance(p1, p2)
         if px == 0:
             messagebox.showerror("Error", "Points are identical.")
             self.measurement_points.clear()
             return
-        line = (p1.tolist(), p2.tolist(), px)
+        line = (p1, p2, px)
         self.lines.append(line)
         self.action_stack.append({'type': 'line', 'line': line})
         self._hist("line", px=px)
@@ -452,13 +448,9 @@ class MetrologyApp:
         self.redraw_measurements()
 
     def _finish_angle(self):
-        p1, p2, p3 = map(np.array, self.measurement_points[:3])
-        v1, v2 = p1 - p2, p3 - p2
-        rad = atan2(v2[1], v2[0]) - atan2(v1[1], v1[0])
-        deg = abs(degrees(rad))
-        if deg > 180:
-            deg = 360 - deg
-        angle = (p1.tolist(), p2.tolist(), p3.tolist(), deg)
+        p1, p2, p3 = self.measurement_points[:3]
+        deg = angle_between(p1, p2, p3)
+        angle = (p1, p2, p3, deg)
         self.angles.append(angle)
         arc = self._draw_arc(self._sop(p2), self._sop(p1), self._sop(p3), record=True)
         self.action_stack.append({'type': 'angle', 'angle': angle, 'arc': arc})
@@ -466,11 +458,13 @@ class MetrologyApp:
         self.measurement_points.clear()
         self.redraw_measurements()
 
-    # ── Calibration ────────────────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════════
+    # CALIBRATION
+    # ══════════════════════════════════════════════════════════════════════
 
     def _do_calibrate(self):
-        p1, p2 = map(np.array, self.calibration_points)
-        px = float(np.linalg.norm(p2 - p1))
+        p1, p2 = self.calibration_points
+        px = line_distance(p1, p2)
         if px == 0:
             messagebox.showerror("Error", "Points must not overlap.")
             self.calibration_points.clear()
@@ -505,7 +499,7 @@ class MetrologyApp:
                 self.action_stack.append({
                     'type': 'calibration',
                     'previous_points': prev_pts,
-                    'previous_scale':  prev_scale
+                    'previous_scale':  prev_scale,
                 })
                 self._st_calib.configure(
                     text=f"● {self.scale_factor:.4f} {self.unit.get()}/px",
@@ -518,7 +512,9 @@ class MetrologyApp:
         entry.bind("<Return>", lambda _: confirm())
         ctk.CTkButton(dlg, text="Set Scale", command=confirm).pack(pady=4)
 
-    # ── Text annotation ────────────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════════
+    # TEXT ANNOTATION
+    # ══════════════════════════════════════════════════════════════════════
 
     def _start_text_flow(self):
         if self.image is None:
@@ -610,35 +606,29 @@ class MetrologyApp:
         self.canvas.delete("measurement")
         self.canvas.delete("preview")
 
-        # Text annotations
         for x, y, text in self.texts:
             sx, sy = self._sop([x, y])
             self.canvas.create_text(sx, sy, text=text, fill=self.text_color,
                                     font=("Arial", 12), tags="measurement")
 
-        # Points
         if self.show_points_var.get():
-            for i, pt in enumerate(self.calibration_points + self.measurement_points):
+            for pt in self.calibration_points + self.measurement_points:
                 sx, sy = self._sop(pt)
                 self.canvas.create_oval(sx-5, sy-5, sx+5, sy+5,
-                                        fill=self.point_color, outline="white", width=1,
-                                        tags=("measurement",))
+                                        fill=self.point_color, outline="white",
+                                        width=1, tags="measurement")
 
-        # Lines
         if self.show_lines_var.get():
             for i, (start, end, px) in enumerate(self.lines):
-                ss = self._sop(start)
-                se = self._sop(end)
+                ss, se = self._sop(start), self._sop(end)
                 tag = f"ln{i}"
                 self.canvas.create_line(*ss, *se, fill=self.line_color,
                                         width=2, tags=(tag, "measurement"))
-                label = self._fmt(px)
                 mx, my = (ss[0]+se[0])//2, (ss[1]+se[1])//2
-                self._lbl(mx, my - 12, label)
+                self._lbl(mx, my - 12, self._fmt(px))
                 self.canvas.tag_bind(tag, "<Enter>",
-                    lambda e, l=label: self._tooltip(e.x, e.y, l))
+                    lambda e, l=self._fmt(px): self._tooltip(e.x, e.y, l))
 
-        # Angles
         if self.show_angles_var.get():
             for i, (p1, p2, p3, deg) in enumerate(self.angles):
                 sp1, sp2, sp3 = self._sop(p1), self._sop(p2), self._sop(p3)
@@ -653,7 +643,7 @@ class MetrologyApp:
                     lambda e, d=deg: self._tooltip(e.x, e.y, f"{d:.2f}°"))
 
     # ══════════════════════════════════════════════════════════════════════
-    # LIVE PREVIEW (mouse motion)
+    # LIVE PREVIEW
     # ══════════════════════════════════════════════════════════════════════
 
     def on_motion(self, event):
@@ -672,6 +662,7 @@ class MetrologyApp:
             p1 = self._sop(self.measurement_points[0])
             self.canvas.create_line(*p1, event.x, event.y,
                                     fill=self.line_color, width=2, dash=(6, 4), tags="preview")
+            from math import sqrt
             px = sqrt((event.x-p1[0])**2 + (event.y-p1[1])**2) / self.zoom_level
             self._plbl((p1[0]+event.x)//2, (p1[1]+event.y)//2 - 14, self._fmt(px))
 
@@ -686,17 +677,15 @@ class MetrologyApp:
                 self.canvas.create_line(*p2, *p1, fill=self.line_color, width=2, tags="preview")
                 self.canvas.create_line(*p2, event.x, event.y,
                                         fill=self.line_color, width=2, dash=(6, 4), tags="preview")
-                v1 = (p1[0]-p2[0], p1[1]-p2[1])
-                v2 = (event.x-p2[0], event.y-p2[1])
-                mag = sqrt(v1[0]**2+v1[1]**2) * sqrt(v2[0]**2+v2[1]**2)
-                if mag > 0:
-                    ang = degrees(acos(max(-1, min(1, (v1[0]*v2[0]+v1[1]*v2[1]) / mag))))
+                ang = preview_angle(p1, p2, event.x, event.y)
+                if ang is not None:
                     self._plbl(p2[0], p2[1] - 22, f"{ang:.1f}°")
 
         elif mode == "calibrate" and len(self.calibration_points) == 1:
             p1 = self._sop(self.calibration_points[0])
             self.canvas.create_line(*p1, event.x, event.y,
                                     fill="#4CAF50", width=2, dash=(6, 4), tags="preview")
+            from math import sqrt
             px = sqrt((event.x-p1[0])**2 + (event.y-p1[1])**2) / self.zoom_level
             self._plbl((p1[0]+event.x)//2, (p1[1]+event.y)//2 - 14, f"{px:.1f} px")
 
@@ -722,7 +711,6 @@ class MetrologyApp:
     def on_zoom(self, event):
         old_zoom = self.zoom_level
         self.zoom_level = max(0.05, min(old_zoom * (1.1 if event.delta > 0 else 0.9), 20))
-        # Keep the image point under the cursor fixed
         self.offset_x = event.x - (event.x - self.offset_x) * (self.zoom_level / old_zoom)
         self.offset_y = event.y - (event.y - self.offset_y) * (self.zoom_level / old_zoom)
         self._st_zoom.configure(text=f"Zoom: {int(self.zoom_level*100)}%")
@@ -764,7 +752,6 @@ class MetrologyApp:
         new = "light" if ctk.get_appearance_mode() == "Dark" else "dark"
         ctk.set_appearance_mode(new)
         self.canvas.configure(bg="#1c1c1e" if new == "dark" else "#d0d0d0")
-        # Re-theme the history listbox
         bg = "#2b2b2b" if new == "dark" else "#f0f0f0"
         fg = "white"   if new == "dark" else "black"
         self.history_list.configure(bg=bg, fg=fg)
@@ -774,43 +761,15 @@ class MetrologyApp:
     # ══════════════════════════════════════════════════════════════════════
 
     def _draw_arc(self, center, start, end, radius=50, record=True):
-        sx, sy = start[0]-center[0], center[1]-start[1]
-        ex, ey = end[0]-center[0],   center[1]-end[1]
-        sa = atan2(sy, sx)
-        ea = atan2(ey, ex)
-        if sa < 0: sa += 2*np.pi
-        if ea < 0: ea += 2*np.pi
-        if (ea - sa) > np.pi:
-            sa, ea = ea, sa + 2*np.pi
-        pts = [
-            (int(center[0] + radius * np.cos(a)),
-             int(center[1] - radius * np.sin(a)))
-            for a in np.linspace(sa, ea, 100)
-        ]
+        pts = arc_canvas_points(center, start, end, radius=radius)
         segs = [
             self.canvas.create_line(pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1],
                                     fill=self.line_color, width=2, tags="measurement")
-            for i in range(len(pts)-1)
+            for i in range(len(pts) - 1)
         ]
         if record:
             self.arcs.append(segs)
         return segs
-
-    def _draw_arc_on_pil(self, img, center, start, end, thickness=2):
-        sa = atan2(start[1]-center[1], start[0]-center[0])
-        ea = atan2(end[1]-center[1],   end[0]-center[0])
-        if sa < 0: sa += 2*np.pi
-        if ea < 0: ea += 2*np.pi
-        span = ea - sa
-        if span < 0: span += 2*np.pi
-        if span > np.pi:
-            sa, ea = ea, sa
-        r = int(min(np.linalg.norm(np.array(start)-np.array(center)),
-                    np.linalg.norm(np.array(end)-np.array(center))) * 0.25)
-        draw = ImageDraw.Draw(img)
-        bbox = [(center[0]-r, center[1]-r), (center[0]+r, center[1]+r)]
-        draw.arc(bbox, start=np.degrees(sa), end=np.degrees(ea),
-                 fill=self.line_color, width=thickness)
 
     # ══════════════════════════════════════════════════════════════════════
     # HELPERS
@@ -818,27 +777,17 @@ class MetrologyApp:
 
     def _sop(self, point) -> tuple[int, int]:
         """Scale and offset a point to canvas coordinates."""
-        return (int(point[0]*self.zoom_level + self.offset_x),
-                int(point[1]*self.zoom_level + self.offset_y))
+        return (int(point[0] * self.zoom_level + self.offset_x),
+                int(point[1] * self.zoom_level + self.offset_y))
 
     def _fmt(self, px_dist: float) -> str:
-        """Format a pixel distance according to current unit and calibration."""
-        unit = self.unit.get()
-        if unit == "px" or self.scale_factor is None:
-            return f"{px_dist:.1f} px"
-        mm = px_dist * self.scale_factor
-        if unit == "mm":  return f"{mm:.2f} mm"
-        if unit == "cm":  return f"{mm/10:.3f} cm"
-        if unit == "in":  return f"{mm/25.4:.4f} in"
-        return f"{mm:.2f} mm"
+        return format_distance(px_dist, self.scale_factor, self.unit.get())
 
     def _lbl(self, x, y, text):
-        """Draw a measurement label on the canvas."""
         self.canvas.create_text(x, y, text=text, fill=self.text_color,
                                 font=("Arial", 10, "bold"), tags="measurement")
 
     def _plbl(self, x, y, text):
-        """Draw a preview label (live feedback)."""
         self.canvas.create_text(x, y, text=text, fill=self.text_color,
                                 font=("Arial", 10, "bold"), tags="preview")
 
@@ -878,9 +827,3 @@ class MetrologyApp:
         ctk.CTkLabel(dlg, text="Keyboard: L · A · C · R · Ctrl+Z · Ctrl+O · Ctrl+S",
                      font=ctk.CTkFont(size=10), text_color="gray").pack(pady=2)
         ctk.CTkButton(dlg, text="Close", command=dlg.destroy, width=100).pack(pady=16)
-
-
-if __name__ == "__main__":
-    root = ctk.CTk()
-    app = MetrologyApp(root)
-    root.mainloop()
