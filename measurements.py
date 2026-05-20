@@ -42,14 +42,13 @@ def arc_canvas_points(center, start, end, radius=50, n=100):
     ex, ey = end[0]   - center[0], center[1] - end[1]
     sa = atan2(sy, sx)
     ea = atan2(ey, ex)
-    if sa < 0: sa += 2 * np.pi
-    if ea < 0: ea += 2 * np.pi
-    if (ea - sa) > np.pi:
-        sa, ea = ea, sa + 2 * np.pi
+    span = (ea - sa) % (2 * np.pi)   # counterclockwise span in [0, 2π)
+    # shorter arc: CCW if span ≤ π, CW if span > π
+    angle_end = sa + span if span <= np.pi else sa + span - 2 * np.pi
     return [
         (int(center[0] + radius * np.cos(a)),
          int(center[1] - radius * np.sin(a)))
-        for a in np.linspace(sa, ea, n)
+        for a in np.linspace(sa, angle_end, n)
     ]
 
 

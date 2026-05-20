@@ -1,3 +1,6 @@
+import os
+import sys
+import tempfile
 import cv2
 import numpy as np
 import tkinter as tk
@@ -10,6 +13,11 @@ from measurements import (
     arc_canvas_points, arc_pil_params, format_distance,
 )
 from translations import TRANSLATIONS
+
+def _resource_path(name: str) -> str:
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, name)
+
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -28,6 +36,16 @@ class MetrologyApp:
         sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
         w, h = 1700, 900
         self.root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+
+        # ── Logo ───────────────────────────────────────────────────────────
+        self._logo_pil = None
+        try:
+            self._logo_pil = Image.open(_resource_path("logo.png")).convert("RGBA")
+            _ico_path = os.path.join(tempfile.gettempdir(), "visionmetrics.ico")
+            self._logo_pil.save(_ico_path, format="ICO")
+            self.root.iconbitmap(_ico_path)
+        except Exception:
+            pass
 
         # ── Language ───────────────────────────────────────────────────────
         self.lang = "en"
