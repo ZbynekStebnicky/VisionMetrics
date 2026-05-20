@@ -66,7 +66,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "dlg_about_title":  "About",
         "dlg_about_sub":    "Professional image measurement & annotation",
         "dlg_about_feat":   "Distance · Angle · Calibration · Text",
-        "dlg_about_keys":   "Keyboard: L · A · C · R · Ctrl+Z · Ctrl+O · Ctrl+S",
+        "dlg_about_keys":   "Keyboard: L · A · C · R · Ctrl+Z · Ctrl+O · Ctrl+S\nHold Shift while drawing a line to snap to 0° / 45° / 90°",
         # ── Error / warning messages ──────────────────────────────────────
         "title_error":      "Error",
         "title_warning":    "Warning",
@@ -145,7 +145,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "dlg_about_title":  "O aplikaci",
         "dlg_about_sub":    "Profesionální nástroj pro měření a anotaci obrázků",
         "dlg_about_feat":   "Vzdálenost · Úhel · Kalibrace · Text",
-        "dlg_about_keys":   "Klávesy: L · A · C · R · Ctrl+Z · Ctrl+O · Ctrl+S",
+        "dlg_about_keys":   "Klávesy: L · A · C · R · Ctrl+Z · Ctrl+O · Ctrl+S\nDržte Shift při kreslení čáry pro přichycení na 0° / 45° / 90°",
         # ── Error / warning messages ──────────────────────────────────────
         "title_error":      "Chyba",
         "title_warning":    "Varování",
