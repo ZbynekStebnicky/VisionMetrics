@@ -1,6 +1,6 @@
 # Vision Metrics
 
-**Vision Metrics** is a free, professional desktop tool for precise image measurement and annotation — built for metrology, quality control, and engineering image analysis.
+**Vision Metrics** is a free, professional desktop tool for precise image measurement and annotation – built for metrology, quality control, and engineering image analysis.
 
 ![Vision Metrics Screenshot](docs/screenshot.png)
 
@@ -10,9 +10,9 @@
 
 - **Distance measurement** with real-time rubber-band preview and calibrated unit display
 - **Angle measurement** between three points with automatic arc rendering
-- **Scale calibration** — define a known distance to convert pixels into mm, cm, or inches
+- **Scale calibration** – define a known distance to convert pixels into mm, cm, or inches
 - **Text annotations** placed directly on the image
-- **Zoom to cursor** — scroll wheel zooms into the exact area under your mouse
+- **Zoom to cursor** – scroll wheel zooms into the exact area under your mouse
 - **Pan** with middle mouse button
 - **Undo / Clear** for all measurement types
 - **Toggle visibility** of lines, points, and angles independently
@@ -56,12 +56,12 @@
 
 ### Basic workflow
 
-1. **Load an image** — File → Open Image (or `Ctrl+O`)
-2. **Calibrate** — press `C`, click two points of known distance, enter the real-world value
-3. **Measure distances** — press `L`, click two points
-4. **Measure angles** — press `A`, click three points (vertex is the second point)
-5. **Annotate** — use the *Add Text Annotation* button, type your text, click to place
-6. **Save** — File → Save Image (`Ctrl+S`) exports the image with all annotations baked in
+1. **Load an image** – File → Open Image (or `Ctrl+O`)
+2. **Calibrate** – press `C`, click two points of known distance, enter the real-world value
+3. **Measure distances** – press `L`, click two points
+4. **Measure angles** – press `A`, click three points (vertex is the second point)
+5. **Annotate** – use the *Add Text Annotation* button, type your text, click to place
+6. **Save** – File → Save Image (`Ctrl+S`) exports the image with all annotations baked in
 
 ### Navigation
 
