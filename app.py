@@ -361,7 +361,7 @@ class MetrologyApp:
             filetypes=[("Image Files", "*.jpg *.jpeg *.png *.bmp *.tif *.tiff")])
         if not path:
             return
-        self.image = cv2.imread(path)
+        self.image = cv2.imdecode(np.fromfile(path, dtype=np.uint8), cv2.IMREAD_COLOR)
         if self.image is None:
             messagebox.showerror(self._t("title_error"), self._t("err_load_fail"))
             return
